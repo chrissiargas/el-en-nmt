@@ -1,0 +1,8 @@
+pyyaml
+regex
+xxhash
+tqdm
+numpy
+# only for scripts/score_labse.py
+torch
+sentence-transformers

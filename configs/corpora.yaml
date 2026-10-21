@@ -1,0 +1,73 @@
+# Greek-English training data selection from OPUS (https://opus.nlpl.eu, el-en).
+# See docs/data_selection.md for the reasoning behind every choice.
+#
+# Corpora are processed IN ORDER and deduplicated globally, so a pair that
+# appears in several corpora is credited to the first (= most trusted) one.
+#
+#   profile:  clean | mined | subs     -> rule-filter strictness (elen_data/textfilters.py)
+#   take:     all     keep every pair that survives filtering
+#             random  uniform random sample of `cap` surviving pairs (whole corpus is streamed)
+#             head    first `cap` surviving pairs (CCMatrix is sorted by LASER margin, so head = best)
+#   cap:      max pairs kept from this corpus after filtering + dedup (scaled by --scale)
+#   version:  optional, defaults to the latest version in OPUS
+#   min_labse: optional per-corpus override of the profile threshold below
+#
+# Every corpus is scored with LaBSE (scripts/score_labse.py) and assemble.py drops pairs below the
+# threshold for its profile: even Europarl has whole sessions where the English is shifted by a sentence.
+# Capped corpora are built with cap * oversample pairs, so the threshold has room to drop pairs before
+# the cap is applied.
+
+oversample: 1.3
+min_labse: {clean: 0.6, mined: 0.7, subs: 0.65}
+
+corpora:
+  # ---- Tier 1: curated, mostly human-translated. Keep everything. ----------------------------
+  - {name: Europarl, profile: clean, take: all}             # parliament proceedings, 1.29M
+  - {name: TED2020, profile: clean, take: all}              # spoken, general topics, 0.27M
+  - {name: GlobalVoices, profile: clean, take: all}         # citizen news, 0.12M
+  - {name: SETIMES, profile: clean, take: all}              # Balkan news, 0.23M
+  - {name: wikimedia, profile: clean, take: all}            # Wikipedia Content Translation, 0.91M
+  - {name: Wikipedia, profile: clean, take: all}            # 0.10M
+  - {name: ELRC-5067-SciPar, profile: clean, take: all}     # thesis abstracts, scientific, 0.74M
+  - {name: ELITR-ECA, profile: clean, take: all}            # EU Court of Auditors, 0.38M
+  - {name: ECB, profile: clean, take: all}                  # finance, 0.10M
+  - {name: Tatoeba, profile: clean, take: all}              # short everyday sentences, 27K
+  - {name: Books, profile: clean, take: all}                # literature, 1.3K
+  - {name: JRC-Acquis, profile: clean, take: all}
+  - {name: EUconst, profile: clean, take: all}
+  - {name: TildeMODEL, profile: clean, take: all}
+  - {name: SPC, profile: clean, take: all}
+  - {name: ECDC, profile: clean, take: all}
+
+  # ---- Tier 2: curated but huge / repetitive domains. Cap them so they don't dominate. --------
+  - {name: DGT, profile: clean, take: random, cap: 800000}            # EU legislation, 5.8M
+  - {name: ELRC-2711-EMEA, profile: clean, take: random, cap: 300000} # medicine leaflets, 0.78M, very repetitive
+  - {name: EUbookshop, profile: mined, take: random, cap: 400000}     # EU publications, PDF-extracted -> noisy
+  - {name: QED, profile: subs, take: random, cap: 200000}             # educational video subtitles
+  - {name: LinguaTools-WikiTitles, profile: clean, take: random, cap: 100000}  # named entities / titles
+
+  # ---- Tier 3: web-mined and subtitles. Strict rules. -------------------------------------------
+  - {name: MaCoCu, profile: mined, take: random, cap: 1500000}       # 3.6M, bicleaner-filtered at release
+  - {name: CCMatrix, profile: mined, take: head, cap: 1500000}       # 49M, sorted by LASER margin
+  - {name: ParaCrawl, profile: mined, take: random, cap: 1500000}    # 21M
+  - {name: HPLT, profile: mined, take: random, cap: 1000000}         # 56M
+  - {name: OpenSubtitles, profile: subs, take: random, cap: 1500000} # 77M, conversational register
+
+# Every small ELRC/ELRA set (public administration, Greek & Cypriot government, health, ...).
+# Many are mirrors of each other (ELRA-W0xxx == ELRC-xxx); global dedup removes the copies.
+small_sets:
+  prefixes: [ELRC, ELRA]
+  max_pairs: 100000
+  profile: clean
+  exclude: [ELRC-EMEA, ELRC_2682]  # = ELRC-2711-EMEA (ELRC-EMEA also has broken metadata in OPUS)
+
+# Deliberately left out:
+#   NLLB, MultiHPLT, MultiMaCoCu  exact duplicates of CCMatrix, HPLT, MaCoCu
+#   NeuLab-TedTalks               same talks as TED2020
+#   EMEA                          same domain as ELRC-2711-EMEA (older crawl)
+#   CCAligned                     known to be very noisy (Kreutzer et al., 2022)
+#   WikiMatrix                    noisy; Wikipedia already covered by wikimedia/Wikipedia
+#   XLEnt                         automatically mined entity pairs, not sentences
+#   KDE4, GNOME, Ubuntu, translatewiki, tldr-pages   software UI strings (placeholders, accelerator keys)
+#   bible-uedin                   archaic register; CCMatrix's top rows are already heavy on religious text
+#   ELRC-EMEA, ELRC_2682          duplicates of ELRC-2711-EMEA
